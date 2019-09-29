@@ -5,10 +5,12 @@ declare(strict_types = 1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Exception;
 use GuzzleHttp\Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
+use Symfony\Component\HttpFoundation\Response;
 
 use const true, null;
 
@@ -46,8 +48,6 @@ class ProjectController extends Controller
      * @param \Illuminate\Http\Request $request
      *
      * @return \Illuminate\Http\JsonResponse
-     *
-     * @throws \RuntimeException
      */
     public function index(Request $request): JsonResponse
     {
@@ -56,7 +56,6 @@ class ProjectController extends Controller
                 $request->get('login', null),
                 $request->get('password', null),
             ],
-            'debug' => true
         ];
 
         if ($includeParams = $request->get('include')) {
@@ -67,22 +66,29 @@ class ProjectController extends Controller
             ];
         }
 
-        $response = $this->client->get('/api/v2/project/filter', $params);
-
         $responseBody = [];
 
-        if ($response->getStatusCode() === 200) {
-            $response = json_decode(
-                (string) $response->getBody()->getContents(),
-                true
-            );
+        try {
+            $response = $this->client->get('/api/v2/project/filter', $params);
 
-            $responseBody['data'] = $response['data'] ?? [];
+            if ($response->getStatusCode() === Response::HTTP_OK) {
+                $responseData = json_decode(
+                    (string) $response->getBody()->getContents(),
+                    true
+                );
+
+                $responseBody = [
+                    'code' => $response->getStatusCode(),
+                    'data' => $responseData['data'] ?? [],
+                ];
+            }
+        } catch (Exception $e) {
+            $responseBody = [
+                'code'  => Response::HTTP_BAD_REQUEST,
+                'error' => $e->getMessage(),
+            ];
         }
 
-        return response()->json([
-            'code'   => $response->getStatusCode(),
-            'data'   => $responseBody,
-        ]);
+        return response()->json($responseBody);
     }
 }
